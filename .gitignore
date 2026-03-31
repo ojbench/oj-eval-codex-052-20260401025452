@@ -1,0 +1,11 @@
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+code
+install_manifest.txt
+*.o
+*.obj
+*.exe
+.DS_Store
+
