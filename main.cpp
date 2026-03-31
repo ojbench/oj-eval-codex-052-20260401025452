@@ -85,13 +85,12 @@ static string term_to_str(const Term& t, bool first){
     bool isConst = (t.b==0 && t.c==0 && t.d==0);
     if (!(a==1 && !isConst)) s += to_string(a);
     if (!isConst){
-        if (!(a==1 && !isConst)) ; // coefficient already printed, no '*'
         // x part
         if (t.b){ s += "x"; if (t.b!=1){ s += "^"+to_string(t.b);} }
         // sin part
-        if (t.c){ s += "sinx"; if (t.c!=1){ s += "^"+to_string(t.c);} }
+        if (t.c){ s += "sin"; if (t.c!=1){ s += "^"+to_string(t.c);} s += "x"; }
         // cos part
-        if (t.d){ s += "cosx"; if (t.d!=1){ s += "^"+to_string(t.d);} }
+        if (t.d){ s += "cos"; if (t.d!=1){ s += "^"+to_string(t.d);} s += "x"; }
     }
     if (s.empty()) s = "0"; // shouldn't happen
     return s;
@@ -118,8 +117,11 @@ static string frac_to_str(const Frac& f){
     string q = poly_to_str(f.q);
     if (q=="1") return p;
     if (p=="0") return string("0");
-    // s1/s2 format with parentheses unless q==1 handled
-    return string("(")+p+")/"+q;
+    // s1/s2 format; wrap numerator always, wrap denominator if multiple terms
+    string left = string("(")+p+")";
+    bool denom_multi = f.q.t.size()>1;
+    string right = denom_multi ? string("(")+q+")" : q;
+    return left+"/"+right;
 }
 
 // Lexer / Parser
@@ -168,22 +170,21 @@ static Frac parse_factor(Lexer&L){
         Frac x = parse_factor(L);
         Frac z = make_int(0); return frac_sub(z, x);
     }
-    // try sinx, cosx, x, integer
+    // try sin^kx, cos^kx, x, integer
     if (L.i+3<=L.n && L.s.substr(L.i,3)=="sin"){
-        L.i+=3; // expect x
+        L.i+=3;
+        int exp=1;
+        if (L.match('^')){ long long k=0; while(L.i<L.n && isdigit((unsigned char)L.s[L.i])){ k=k*10+(L.s[L.i++]-'0'); } exp=(int)k; }
         if (L.i<L.n && L.s[L.i]=='x') L.i++;
-        Term t{1,0,1,0};
-        // optional ^k
-        if (L.match('^')){
-            long long k=0; while(L.i<L.n && isdigit((unsigned char)L.s[L.i])){ k=k*10+(L.s[L.i++]-'0'); }
-            t.c=(int)k;
-        }
+        Term t{1,0,exp,0};
         return make_term(t);
     }
     if (L.i+3<=L.n && L.s.substr(L.i,3)=="cos"){
-        L.i+=3; if (L.i<L.n && L.s[L.i]=='x') L.i++;
-        Term t{1,0,0,1};
-        if (L.match('^')){ long long k=0; while(L.i<L.n && isdigit((unsigned char)L.s[L.i])){ k=k*10+(L.s[L.i++]-'0'); } t.d=(int)k; }
+        L.i+=3; 
+        int exp=1;
+        if (L.match('^')){ long long k=0; while(L.i<L.n && isdigit((unsigned char)L.s[L.i])){ k=k*10+(L.s[L.i++]-'0'); } exp=(int)k; }
+        if (L.i<L.n && L.s[L.i]=='x') L.i++;
+        Term t{1,0,0,exp};
         return make_term(t);
     }
     if (L.i<L.n && L.s[L.i]=='x'){
@@ -212,8 +213,9 @@ static Frac parse_term(Lexer&L){
         L.skip();
         if (L.i>=L.n) break;
         char c=L.s[L.i];
-        if (c=='+'||c=='-'||c==')'||c=='/') break;
+        if (c=='+'||c=='-'||c==')') break;
         if (c=='*'){ L.i++; }
+        else if (c=='/'){ L.i++; Frac nxt = parse_powered_atom(L); cur = frac_div(cur, nxt); continue; }
         Frac nxt = parse_powered_atom(L);
         cur = frac_mul(cur, nxt);
     }
@@ -226,9 +228,7 @@ static Frac parse_expr(Lexer&L){
         L.skip(); if (L.i>=L.n) break;
         if (L.s[L.i]=='+'){ L.i++; Frac t=parse_term(L); cur=frac_add(cur,t); }
         else if (L.s[L.i]=='-'){ L.i++; Frac t=parse_term(L); cur=frac_sub(cur,t); }
-        else if (L.s[L.i]=='/'){
-            L.i++; Frac t=parse_term(L); cur=frac_div(cur,t);
-        } else break;
+        else break;
     }
     return cur;
 }
@@ -244,4 +244,3 @@ int main(){
     cout<<g<<"\n"<<h<<"\n";
     return 0;
 }
-
